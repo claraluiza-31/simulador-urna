@@ -1,0 +1,9 @@
+{
+  "name":"Simulador de Urna",
+  "short_name":"Urna",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#f8f8f8",
+  "theme_color":"#f4f5f7",
+  "lang":"pt-BR"
+}

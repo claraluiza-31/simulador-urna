@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f5f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<title>Simulador de Urna</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef0f3;color:#151515}
+.app{max-width:520px;margin:auto;min-height:100vh;background:#f8f8f8;box-shadow:0 0 30px #0001}
+header{padding:18px 20px;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:2}
+header h1{font-size:20px;margin:0} header small{color:#666}
+main{padding:18px}.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:16px;margin-bottom:14px}
+button{border:0;border-radius:10px;padding:13px 16px;font-weight:700;cursor:pointer}
+.primary{background:#111;color:#fff}.secondary{background:#e8eaed}.danger{background:#c62828;color:white}
+input,select{width:100%;padding:12px;border:1px solid #bbb;border-radius:9px;margin:6px 0 12px;font-size:16px}
+.hidden{display:none!important}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.key{font-size:20px;background:#e4e5e7;padding:16px}
+.actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}.actions button{padding:12px 6px}
+.photo{width:115px;height:145px;object-fit:cover;border-radius:8px;border:1px solid #bbb;background:#eee;display:block;margin:auto}
+.center{text-align:center}.candidate-name{font-size:21px;font-weight:800;margin-top:10px}.muted{color:#666}.num{font-size:30px;letter-spacing:6px;min-height:40px}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.list-item{display:flex;gap:12px;align-items:center;border-top:1px solid #eee;padding:10px 0}.thumb{width:52px;height:65px;object-fit:cover;border-radius:6px;background:#eee}
+.notice{font-size:13px;color:#555;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>Simulador de Urna</h1><small>Aplicativo de treinamento — não oficial</small></header>
+<main>
+<section id="home">
+<div class="card"><h2>Início</h2><p class="muted">Cadastre candidatos e faça uma simulação de votação diretamente pelo celular.</p>
+<div class="row"><button class="primary" onclick="show('vote')">Iniciar votação</button><button class="secondary" onclick="show('admin')">Candidatos</button></div></div>
+<div class="card notice"><b>Uso:</b> esta aplicação é apenas uma simulação para treinamento e não registra nem transmite votos reais.</div>
+</section>
+
+<section id="admin" class="hidden">
+<div class="card"><h2>Cadastrar candidato</h2>
+<label>Nome</label><input id="name" placeholder="Nome do candidato">
+<label>Número</label><input id="number" inputmode="numeric" maxlength="5" placeholder="Ex.: 12345">
+<label>Partido</label><input id="party" placeholder="Partido">
+<label>Cargo</label><select id="office"><option>Vereador</option><option>Prefeito</option><option>Deputado</option><option>Senador</option><option>Outro</option></select>
+<label>Foto</label><input id="photo" type="file" accept="image/*" capture="environment">
+<div class="row"><button class="secondary" onclick="show('home')">Voltar</button><button class="primary" onclick="saveCandidate()">Salvar candidato</button></div>
+</div>
+<div class="card"><h3>Candidatos cadastrados</h3><div id="candidateList"></div></div>
+</section>
+
+<section id="vote" class="hidden">
+<div class="card center"><h2 id="officeTitle">Votação</h2><p class="muted">Digite o número do candidato</p>
+<div class="num" id="typed">—</div><div id="candidateInfo" class="hidden">
+<img id="votePhoto" class="photo"><div class="candidate-name" id="voteName"></div><div id="voteParty" class="muted"></div>
+</div>
+<div id="blankInfo" class="muted hidden">VOTO EM BRANCO</div>
+<div id="invalidInfo" class="muted hidden">NÚMERO NÃO ENCONTRADO</div>
+</div>
+<div class="card"><div class="grid">
+<button class="key" onclick="key('1')">1</button><button class="key" onclick="key('2')">2</button><button class="key" onclick="key('3')">3</button>
+<button class="key" onclick="key('4')">4</button><button class="key" onclick="key('5')">5</button><button class="key" onclick="key('6')">6</button>
+<button class="key" onclick="key('7')">7</button><button class="key" onclick="key('8')">8</button><button class="key" onclick="key('9')">9</button>
+<button class="key" onclick="key('0')">0</button><button class="key" onclick="backspace()">⌫</button><button class="key" onclick="blank()">BRANCO</button>
+</div><div class="actions">
+<button style="background:#ddd" onclick="clearVote()">CORRIGE</button><button style="background:#4caf50;color:#fff" onclick="confirmVote()">CONFIRMA</button><button class="secondary" onclick="show('home')">SAIR</button>
+</div></div>
+</section>
+
+<section id="result" class="hidden">
+<div class="card center"><h2>Votação encerrada</h2><p id="resultText"></p><button class="primary" onclick="show('home')">Voltar ao início</button></div>
+</section>
+</main>
+</div>
+<script>
+const KEY='urna_candidatos_v1';
+let candidates=JSON.parse(localStorage.getItem(KEY)||'[]'), typed='', current=null, blankVote=false;
+function show(id){document.querySelectorAll('main>section').forEach(s=>s.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');if(id==='admin')renderList();if(id==='vote')resetVote();}
+function saveCandidate(){
+ const name=document.getElementById('name').value.trim(), number=document.getElementById('number').value.trim(), party=document.getElementById('party').value.trim(), office=document.getElementById('office').value;
+ const file=document.getElementById('photo').files[0];
+ if(!name||!number){alert('Informe nome e número.');return}
+ if(candidates.some(c=>c.number===number)){alert('Esse número já está cadastrado.');return}
+ const finish=(photo)=>{candidates.push({name,number,party,office,photo:photo||''});localStorage.setItem(KEY,JSON.stringify(candidates));document.getElementById('name').value='';document.getElementById('number').value='';document.getElementById('party').value='';document.getElementById('photo').value='';renderList();alert('Candidato salvo!')};
+ if(file){const r=new FileReader();r.onload=()=>finish(r.result);r.readAsDataURL(file)}else finish('');
+}
+function renderList(){const el=document.getElementById('candidateList');el.innerHTML=candidates.length?'':'<p class="muted">Nenhum candidato cadastrado.</p>';candidates.forEach((c,i)=>{el.innerHTML+=`<div class="list-item"><img class="thumb" src="${c.photo||''}"><div><b>${c.name}</b><br>Nº ${c.number} · ${c.party||'Sem partido'}<br><small>${c.office}</small></div><button class="danger" onclick="del(${i})">Excluir</button></div>`})}
+function del(i){if(confirm('Excluir este candidato?')){candidates.splice(i,1);localStorage.setItem(KEY,JSON.stringify(candidates));renderList()}}
+function key(k){if(typed.length<5){typed+=k;updateVote()}}
+function backspace(){typed=typed.slice(0,-1);updateVote()}
+function blank(){typed='';blankVote=true;updateVote()}
+function clearVote(){resetVote()}
+function resetVote(){typed='';current=null;blankVote=false;updateVote()}
+function updateVote(){
+ document.getElementById('typed').textContent=blankVote?'BRANCO':(typed||'—');
+ ['candidateInfo','blankInfo','invalidInfo'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+ if(blankVote){document.getElementById('blankInfo').classList.remove('hidden');return}
+ if(typed.length>=1){current=candidates.find(c=>c.number===typed)||null;if(current){document.getElementById('candidateInfo').classList.remove('hidden');document.getElementById('voteName').textContent=current.name;document.getElementById('voteParty').textContent=(current.party||'')+' · Nº '+current.number;document.getElementById('votePhoto').src=current.photo||''}else if(typed.length>=3)document.getElementById('invalidInfo').classList.remove('hidden')}
+}
+function confirmVote(){if(blankVote){finish('Voto em branco confirmado.');return}if(!current){alert('Digite um número válido ou selecione BRANCO.');return}finish('Voto simulado confirmado para '+current.name+'.')}
+function finish(msg){document.getElementById('resultText').textContent=msg;show('result')}
+renderList();
+</script>
+</body>
+</html>
